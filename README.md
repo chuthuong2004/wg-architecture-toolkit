@@ -38,14 +38,15 @@ curl -fsSL https://raw.githubusercontent.com/chuthuong2004/wg-architecture-toolk
   | bash -s -- architecture-doc-writer
 ```
 
-You'll be prompted:
+You'll get an arrow-key picker (↑/↓ to move, Enter to confirm, q/Esc to cancel):
 
 ```
-Where do you want to install the skill(s)?
-  1) user    — /Users/you/.claude/skills            (available in every project)
-  2) project — /current/dir/.claude/skills          (scoped to this project)
-Pick [1/2] (default 1):
+Where do you want to install the skill(s)? (↑/↓ + Enter)
+> user    — /Users/you/.claude/skills            (available in every project)
+  project — /current/dir/.claude/skills          (scoped to this project)
 ```
+
+(Falls back to a numbered prompt if your terminal doesn't support raw input.)
 
 **Skip the prompt** by passing `--user` or `--project` explicitly:
 

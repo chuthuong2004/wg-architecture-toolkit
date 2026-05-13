@@ -4,7 +4,7 @@
 # Scope (where the skill is installed):
 #   --user      Install to $HOME/.claude/skills/   (available in every project)
 #   --project   Install to $PWD/.claude/skills/    (scoped to the current repo)
-#   (no flag)   Ask interactively.
+#   (no flag)   Ask interactively (↑/↓ arrow-key picker, falls back to numbered prompt).
 #   CLAUDE_SKILLS_DIR=... overrides both flags and the prompt.
 #
 # Usage:
@@ -72,14 +72,91 @@ confirm() {
   [[ "$ans" =~ ^[Yy]$ ]]
 }
 
+# Arrow-key menu. Args: title, then options.
+# Sets PICK_RESULT to the chosen 0-based index. Returns 1 if cancelled or no TTY.
+# Controls: ↑/↓ or k/j to move, Enter to confirm, Esc/q to cancel.
+_pick_saved_tty=""
+_pick_cleanup() {
+  [ -n "$_pick_saved_tty" ] && stty "$_pick_saved_tty" < /dev/tty 2>/dev/null
+  printf '\e[?25h' > /dev/tty 2>/dev/null || true
+  _pick_saved_tty=""
+}
+
+arrow_pick() {
+  local title="$1"; shift
+  local options=( "$@" )
+  local count=${#options[@]}
+  local selected=0
+
+  if ! have_tty || [ "$count" -eq 0 ]; then return 1; fi
+
+  _pick_saved_tty=$(stty -g < /dev/tty 2>/dev/null) || { _pick_saved_tty=""; return 1; }
+  trap '_pick_cleanup' EXIT INT TERM
+  stty -icanon -echo min 1 time 0 < /dev/tty
+  printf '\e[?25l' > /dev/tty
+
+  printf '%s\n' "$title" > /dev/tty
+  local i
+  for ((i=0; i<count; i++)); do printf '\n' > /dev/tty; done
+  printf '\e[%dA' "$count" > /dev/tty
+
+  local first=1
+  while true; do
+    if [ "$first" -eq 0 ]; then
+      printf '\e[%dA' "$count" > /dev/tty
+    fi
+    first=0
+    for ((i=0; i<count; i++)); do
+      printf '\e[K' > /dev/tty
+      if [ "$i" -eq "$selected" ]; then
+        printf '\e[7m> %s\e[0m\n' "${options[$i]}" > /dev/tty
+      else
+        printf '  %s\n' "${options[$i]}" > /dev/tty
+      fi
+    done
+
+    local key=""
+    IFS= read -rsn1 key < /dev/tty || break
+    case "$key" in
+      $'\e')
+        local rest=""
+        IFS= read -rsn2 -t 1 rest < /dev/tty 2>/dev/null || rest=""
+        case "$rest" in
+          '[A'|'OA') selected=$(( (selected - 1 + count) % count )) ;;
+          '[B'|'OB') selected=$(( (selected + 1) % count )) ;;
+          '')        _pick_cleanup; trap - EXIT INT TERM; return 1 ;;
+        esac
+        ;;
+      $'\n'|$'\r')   break ;;
+      k|K)           selected=$(( (selected - 1 + count) % count )) ;;
+      j|J)           selected=$(( (selected + 1) % count )) ;;
+      q|Q)           _pick_cleanup; trap - EXIT INT TERM; return 1 ;;
+    esac
+  done
+
+  _pick_cleanup
+  trap - EXIT INT TERM
+  PICK_RESULT=$selected
+  return 0
+}
+
 ask_scope() {
-  # No TTY available and no explicit flag → safest default is --user, with a clear warning.
   if ! have_tty; then
     warn "No TTY detected; defaulting to --user."
     warn "Pass --user or --project explicitly (or set CLAUDE_SKILLS_DIR) to silence this."
     SCOPE="user"
     return
   fi
+  if arrow_pick "Where do you want to install the skill(s)? (↑/↓ + Enter)" \
+      "user    — $HOME/.claude/skills            (available in every project)" \
+      "project — $PWD/.claude/skills   (scoped to this project)"; then
+    case "$PICK_RESULT" in
+      0) SCOPE="user" ;;
+      1) SCOPE="project" ;;
+    esac
+    return
+  fi
+  # arrow_pick failed/cancelled — fall back to numbered prompt.
   {
     echo "Where do you want to install the skill(s)?"
     echo "  1) user    — $HOME/.claude/skills            (available in every project)"
@@ -156,6 +233,22 @@ interactive_pick() {
     err "No skills found in $SKILLS_SRC"
     exit 1
   fi
+
+  if have_tty; then
+    local menu=( "${skills[@]}" "all (install every skill)" )
+    if arrow_pick "Pick a skill to install (↑/↓ + Enter, q to cancel):" "${menu[@]}"; then
+      if [ "$PICK_RESULT" -eq "${#skills[@]}" ]; then
+        for s in "${skills[@]}"; do install_one "$s"; done
+      else
+        install_one "${skills[$PICK_RESULT]}"
+      fi
+      return
+    fi
+    info "Cancelled."
+    return
+  fi
+
+  # No TTY: numbered prompt fallback (still supports comma-separated multi-select).
   {
     echo "Available skills:"
     local i=1
