@@ -72,9 +72,12 @@ confirm() {
   [[ "$ans" =~ ^[Yy]$ ]]
 }
 
-# Arrow-key menu. Args: title, then options.
-# Sets PICK_RESULT to the chosen 0-based index. Returns 1 if cancelled or no TTY.
-# Controls: ↑/↓ or k/j to move, Enter to confirm, Esc/q to cancel.
+# Arrow-key menu. Args: title, then options. Sets PICK_RESULT to the chosen
+# 0-based index. Controls: ↑/↓ or k/j to move, Enter to confirm, Esc/q to cancel.
+# Returns:
+#   0 — user confirmed a selection (PICK_RESULT is valid)
+#   1 — user explicitly cancelled (q, bare Esc) — caller should abort
+#   2 — couldn't run (no TTY, stty failed) — caller may fall back to a plain prompt
 #
 # Each option is truncated to fit the terminal width — a wrapped line would
 # desync the cursor-rewind math and produce stacked, garbled output.
@@ -98,14 +101,14 @@ arrow_pick() {
   local count=${#options[@]}
   local selected=0
 
-  if ! have_tty || [ "$count" -eq 0 ]; then return 1; fi
+  if ! have_tty || [ "$count" -eq 0 ]; then return 2; fi
 
   local cols max_label
   cols=$(term_cols)
   max_label=$((cols - 3))     # leave room for "> " prefix and a safety col
   [ "$max_label" -lt 10 ] && max_label=10
 
-  _pick_saved_tty=$(stty -g < /dev/tty 2>/dev/null) || { _pick_saved_tty=""; return 1; }
+  _pick_saved_tty=$(stty -g < /dev/tty 2>/dev/null) || { _pick_saved_tty=""; return 2; }
   trap '_pick_cleanup' EXIT INT TERM
   stty -icanon -echo min 1 time 0 < /dev/tty
   printf '\e[?25l' > /dev/tty
@@ -184,23 +187,26 @@ ask_scope() {
     echo "  project → $PWD/.claude/skills"
     echo
   } > /dev/tty
-  if arrow_pick "Pick scope (↑/↓ + Enter, q to cancel):" \
+  arrow_pick "Pick scope (↑/↓ + Enter, q to cancel):" \
       "user      (global — available in every project)" \
-      "project   (scoped to current directory)"; then
-    case "$PICK_RESULT" in
-      0) SCOPE="user" ;;
-      1) SCOPE="project" ;;
-    esac
-    return
-  fi
-  # arrow_pick failed/cancelled → numbered prompt fallback.
+      "project   (scoped to current directory)"
+  case $? in
+    0) case "$PICK_RESULT" in
+         0) SCOPE="user" ;;
+         1) SCOPE="project" ;;
+       esac
+       return ;;
+    1) info "Cancelled."; exit 130 ;;
+    2) ;;  # fall through to numbered prompt
+  esac
   {
     echo "  1) user"
     echo "  2) project"
   } > /dev/tty
   local ans
-  read_tty "Pick [1/2] (default 1): " ans
+  read_tty "Pick [1/2] (default 1, q to cancel): " ans
   case "$ans" in
+    q|Q)           info "Cancelled."; exit 130 ;;
     2|project|p|P) SCOPE="project" ;;
     *)             SCOPE="user" ;;
   esac
@@ -272,16 +278,17 @@ interactive_pick() {
 
   if have_tty; then
     local menu=( "${skills[@]}" "all (install every skill)" )
-    if arrow_pick "Pick a skill to install (↑/↓ + Enter, q to cancel):" "${menu[@]}"; then
-      if [ "$PICK_RESULT" -eq "${#skills[@]}" ]; then
-        for s in "${skills[@]}"; do install_one "$s"; done
-      else
-        install_one "${skills[$PICK_RESULT]}"
-      fi
-      return
-    fi
-    info "Cancelled."
-    return
+    arrow_pick "Pick a skill to install (↑/↓ + Enter, q to cancel):" "${menu[@]}"
+    case $? in
+      0) if [ "$PICK_RESULT" -eq "${#skills[@]}" ]; then
+           for s in "${skills[@]}"; do install_one "$s"; done
+         else
+           install_one "${skills[$PICK_RESULT]}"
+         fi
+         return ;;
+      1) info "Cancelled."; exit 130 ;;
+      2) ;;  # stty failed — fall through to numbered prompt below
+    esac
   fi
 
   # No TTY: numbered prompt fallback (still supports comma-separated multi-select).
