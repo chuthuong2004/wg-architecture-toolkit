@@ -31,19 +31,22 @@ If you don't pass a flag, the script asks interactively (it reads from `/dev/tty
 
 ### Option 1 — one-liner (no clone)
 
-**Recommended — let the script ask:** `cd` into the project you want to scope the skill to (only matters if you pick "project"), then run:
+**Recommended — let the script ask:** `cd` into the project you want to scope the skill to (only matters if you pick "project"), then run this single line (copy/paste — no line continuation gotchas):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/chuthuong2004/wg-architecture-toolkit/main/install.sh \
-  | bash -s -- architecture-doc-writer
+curl -fsSL https://raw.githubusercontent.com/chuthuong2004/wg-architecture-toolkit/main/install.sh | bash -s -- architecture-doc-writer
 ```
 
 You'll get an arrow-key picker (↑/↓ to move, Enter to confirm, q/Esc to cancel):
 
 ```
-Where do you want to install the skill(s)? (↑/↓ + Enter)
-> user    — /Users/you/.claude/skills            (available in every project)
-  project — /current/dir/.claude/skills          (scoped to this project)
+Install destination:
+  user    → /Users/you/.claude/skills
+  project → /current/dir/.claude/skills
+
+Pick scope (↑/↓ + Enter, q to cancel):
+> user      (global — available in every project)
+  project   (scoped to current directory)
 ```
 
 (Falls back to a numbered prompt if your terminal doesn't support raw input.)
@@ -52,13 +55,11 @@ Where do you want to install the skill(s)? (↑/↓ + Enter)
 
 ```bash
 # Always user-level
-curl -fsSL https://raw.githubusercontent.com/chuthuong2004/wg-architecture-toolkit/main/install.sh \
-  | bash -s -- --user architecture-doc-writer
+curl -fsSL https://raw.githubusercontent.com/chuthuong2004/wg-architecture-toolkit/main/install.sh | bash -s -- --user architecture-doc-writer
 
 # Always project-level (cd into the project first)
 cd ~/code/my-project
-curl -fsSL https://raw.githubusercontent.com/chuthuong2004/wg-architecture-toolkit/main/install.sh \
-  | bash -s -- --project architecture-doc-writer
+curl -fsSL https://raw.githubusercontent.com/chuthuong2004/wg-architecture-toolkit/main/install.sh | bash -s -- --project architecture-doc-writer
 ```
 
 > Non-interactive callers (CI, no TTY) without an explicit flag fall back to `--user` with a warning — pass the flag in those contexts to silence it.
