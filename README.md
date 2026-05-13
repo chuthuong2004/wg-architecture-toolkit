@@ -18,12 +18,31 @@ More skills will be added here (ER design helper, runbook writer, API doc writer
 
 ## Install
 
+### Scope: user vs project
+
+You can install each skill at **two** scopes:
+
+| Scope | Path | When to use |
+|---|---|---|
+| `--user` | `~/.claude/skills/<name>/` | You want the skill available in every project on your machine. |
+| `--project` | `$PWD/.claude/skills/<name>/` | You want the skill scoped to one repo (commit it so team-mates get it on clone). |
+
+If you don't pass a flag, the script asks interactively. The env var `CLAUDE_SKILLS_DIR=/path` overrides both.
+
 ### Option 1 — one-liner (no clone)
 
 ```bash
+# User-level (available in every project)
 curl -fsSL https://raw.githubusercontent.com/chuthuong2004/wg-architecture-toolkit/main/install.sh \
-  | bash -s -- architecture-doc-writer
+  | bash -s -- --user architecture-doc-writer
+
+# Project-level (cd into the project first; installs to $PWD/.claude/skills)
+cd ~/code/my-project
+curl -fsSL https://raw.githubusercontent.com/chuthuong2004/wg-architecture-toolkit/main/install.sh \
+  | bash -s -- --project architecture-doc-writer
 ```
+
+> Always pass `--user` or `--project` when piping from curl. Without a flag and without a TTY the script defaults to `--user` with a warning — passing the flag explicitly silences it.
 
 ### Option 2 — clone + install script
 
@@ -31,14 +50,14 @@ curl -fsSL https://raw.githubusercontent.com/chuthuong2004/wg-architecture-toolk
 git clone https://github.com/chuthuong2004/wg-architecture-toolkit.git
 cd wg-architecture-toolkit
 
-./install.sh                              # interactive picker
-./install.sh all                          # install every skill
-./install.sh architecture-doc-writer      # install named skill(s)
-./install.sh --link architecture-doc-writer  # symlink for live-edit
-./install.sh --uninstall architecture-doc-writer
+./install.sh                                          # interactive (asks scope, then skill)
+./install.sh --user all                               # install every skill, user-level
+./install.sh --project architecture-doc-writer        # one skill, project-level (CWD)
+./install.sh --link --user architecture-doc-writer    # symlink instead of copy (live-edit)
+./install.sh --uninstall --user architecture-doc-writer
 ```
 
-By default the script copies into `~/.claude/skills/<name>/`. Override with:
+Override the destination entirely:
 
 ```bash
 CLAUDE_SKILLS_DIR=/path/to/skills ./install.sh all
@@ -48,8 +67,14 @@ CLAUDE_SKILLS_DIR=/path/to/skills ./install.sh all
 
 ```bash
 git clone https://github.com/chuthuong2004/wg-architecture-toolkit.git
+
+# user-level
 mkdir -p ~/.claude/skills
 cp -R wg-architecture-toolkit/skills/architecture-doc-writer ~/.claude/skills/
+
+# OR project-level
+mkdir -p .claude/skills
+cp -R wg-architecture-toolkit/skills/architecture-doc-writer .claude/skills/
 ```
 
 After install, **restart Claude Code** (or open a new session) so the skills are picked up.
@@ -59,8 +84,11 @@ After install, **restart Claude Code** (or open a new session) so the skills are
 ## Verify install
 
 ```bash
+# user-level
 ls ~/.claude/skills/architecture-doc-writer
-# SKILL.md  assets/  references/
+# project-level
+ls ./.claude/skills/architecture-doc-writer
+# → SKILL.md  assets/  references/
 ```
 
 Open Claude Code and type `/architecture-doc-writer` — the skill should appear in the slash-command list. Or just give Claude a prompt like *"viết tài liệu kiến trúc cho hệ thống X"* — the skill auto-triggers on architecture/design phrasing.
@@ -71,7 +99,8 @@ Open Claude Code and type `/architecture-doc-writer` — the skill should appear
 
 ```bash
 cd wg-architecture-toolkit && git pull
-./install.sh all   # re-copy on top of the existing install
+./install.sh --user all      # re-copy on top of the existing user install
+./install.sh --project all   # …or project install (from inside the target repo)
 ```
 
 If you installed with `--link`, `git pull` alone is enough (the symlink already points at the repo).
@@ -81,9 +110,11 @@ If you installed with `--link`, `git pull` alone is enough (the symlink already 
 ## Uninstalling
 
 ```bash
-./install.sh --uninstall architecture-doc-writer
-# or
+./install.sh --uninstall --user architecture-doc-writer       # remove user-level
+./install.sh --uninstall --project architecture-doc-writer    # remove project-level (run inside the project)
+# or just delete the directory
 rm -rf ~/.claude/skills/architecture-doc-writer
+rm -rf ./.claude/skills/architecture-doc-writer
 ```
 
 ---
