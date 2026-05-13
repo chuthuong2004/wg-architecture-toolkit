@@ -9,7 +9,7 @@
 #   ./install.sh --uninstall <name>           # remove an installed skill
 #
 # One-liner (no clone):
-#   curl -fsSL https://raw.githubusercontent.com/vanthuongdao/wg-architecture-toolkit/main/install.sh \
+#   curl -fsSL https://raw.githubusercontent.com/chuthuong2004/wg-architecture-toolkit/main/install.sh \
 #     | bash -s -- architecture-doc-writer
 
 set -euo pipefail
@@ -27,7 +27,7 @@ err()   { echo "$(color '1;31' '✗') $*" >&2; }
 # When piped from curl, $REPO_DIR points to /dev/fd or similar — re-fetch the repo.
 if [ ! -d "$SKILLS_SRC" ]; then
   TMPDIR_REPO="$(mktemp -d)"
-  REPO_URL="${SKILL_REPO_URL:-https://github.com/vanthuongdao/wg-architecture-toolkit.git}"
+  REPO_URL="${SKILL_REPO_URL:-https://github.com/chuthuong2004/wg-architecture-toolkit.git}"
   info "Cloning $REPO_URL into $TMPDIR_REPO..."
   git clone --depth 1 "$REPO_URL" "$TMPDIR_REPO"
   REPO_DIR="$TMPDIR_REPO"
