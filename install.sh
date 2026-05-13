@@ -22,7 +22,11 @@
 
 set -euo pipefail
 
-REPO_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd 2>/dev/null || echo "" )"
+# When piped from curl, BASH_SOURCE[0] is unset (script came from stdin).
+# Fall back to $0 — it'll be "bash", whose dirname is ".", which is harmless
+# because the `! -d "$SKILLS_SRC"` check below triggers the clone fallback.
+SELF="${BASH_SOURCE[0]:-$0}"
+REPO_DIR="$( cd "$( dirname "$SELF" )" 2>/dev/null && pwd || echo "" )"
 SKILLS_SRC="$REPO_DIR/skills"
 
 color() { printf '\033[%sm%s\033[0m' "$1" "$2"; }
@@ -186,7 +190,7 @@ main() {
       --project)    SCOPE="project"; shift ;;
       --link)       mode="link"; shift ;;
       --uninstall)  action="uninstall"; shift ;;
-      -h|--help)    sed -n '2,22p' "$0" 2>/dev/null || sed -n '2,22p' "${BASH_SOURCE[0]}"; return ;;
+      -h|--help)    sed -n '2,22p' "$SELF" 2>/dev/null || echo "See https://github.com/chuthuong2004/wg-architecture-toolkit#install"; return ;;
       --)           shift; break ;;
       -*)           err "Unknown flag: $1"; return 1 ;;
       *)            break ;;
