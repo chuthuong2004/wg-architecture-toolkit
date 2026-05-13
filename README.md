@@ -21,16 +21,14 @@ More skills will be added here (ER design helper, runbook writer, API doc writer
 ### Option 1 — one-liner (no clone)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/<owner>/wg-architecture-toolkit/main/install.sh \
+curl -fsSL https://raw.githubusercontent.com/vanthuongdao/wg-architecture-toolkit/main/install.sh \
   | bash -s -- architecture-doc-writer
 ```
-
-Replace `<owner>` with your GitHub user/org after pushing.
 
 ### Option 2 — clone + install script
 
 ```bash
-git clone https://github.com/<owner>/wg-architecture-toolkit.git
+git clone https://github.com/vanthuongdao/wg-architecture-toolkit.git
 cd wg-architecture-toolkit
 
 ./install.sh                              # interactive picker
@@ -49,7 +47,7 @@ CLAUDE_SKILLS_DIR=/path/to/skills ./install.sh all
 ### Option 3 — fully manual
 
 ```bash
-git clone https://github.com/<owner>/wg-architecture-toolkit.git
+git clone https://github.com/vanthuongdao/wg-architecture-toolkit.git
 mkdir -p ~/.claude/skills
 cp -R wg-architecture-toolkit/skills/architecture-doc-writer ~/.claude/skills/
 ```
