@@ -143,6 +143,9 @@ arrow_pick() {
     done
 
     local key=""
+    # `read -n1` treats newline as a delimiter (controlled by IFS, default is \n),
+    # so when the user hits Enter the call returns success with $key="" — we have
+    # to match the empty string here, not just $'\n'/$'\r'.
     IFS= read -rsn1 key < /dev/tty || break
     case "$key" in
       $'\e')
@@ -154,10 +157,10 @@ arrow_pick() {
           '')        _pick_cleanup; trap - EXIT INT TERM; return 1 ;;
         esac
         ;;
-      $'\n'|$'\r')   break ;;
-      k|K)           selected=$(( (selected - 1 + count) % count )) ;;
-      j|J)           selected=$(( (selected + 1) % count )) ;;
-      q|Q)           _pick_cleanup; trap - EXIT INT TERM; return 1 ;;
+      ''|$'\n'|$'\r') break ;;
+      k|K)            selected=$(( (selected - 1 + count) % count )) ;;
+      j|J)            selected=$(( (selected + 1) % count )) ;;
+      q|Q)            _pick_cleanup; trap - EXIT INT TERM; return 1 ;;
     esac
   done
 
