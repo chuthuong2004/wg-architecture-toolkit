@@ -27,22 +27,40 @@ You can install each skill at **two** scopes:
 | `--user` | `~/.claude/skills/<name>/` | You want the skill available in every project on your machine. |
 | `--project` | `$PWD/.claude/skills/<name>/` | You want the skill scoped to one repo (commit it so team-mates get it on clone). |
 
-If you don't pass a flag, the script asks interactively. The env var `CLAUDE_SKILLS_DIR=/path` overrides both.
+If you don't pass a flag, the script asks interactively (it reads from `/dev/tty`, so the prompt works even under `curl | bash`). The env var `CLAUDE_SKILLS_DIR=/path` overrides both.
 
 ### Option 1 — one-liner (no clone)
 
+**Recommended — let the script ask:** `cd` into the project you want to scope the skill to (only matters if you pick "project"), then run:
+
 ```bash
-# User-level (available in every project)
+curl -fsSL https://raw.githubusercontent.com/chuthuong2004/wg-architecture-toolkit/main/install.sh \
+  | bash -s -- architecture-doc-writer
+```
+
+You'll be prompted:
+
+```
+Where do you want to install the skill(s)?
+  1) user    — /Users/you/.claude/skills            (available in every project)
+  2) project — /current/dir/.claude/skills          (scoped to this project)
+Pick [1/2] (default 1):
+```
+
+**Skip the prompt** by passing `--user` or `--project` explicitly:
+
+```bash
+# Always user-level
 curl -fsSL https://raw.githubusercontent.com/chuthuong2004/wg-architecture-toolkit/main/install.sh \
   | bash -s -- --user architecture-doc-writer
 
-# Project-level (cd into the project first; installs to $PWD/.claude/skills)
+# Always project-level (cd into the project first)
 cd ~/code/my-project
 curl -fsSL https://raw.githubusercontent.com/chuthuong2004/wg-architecture-toolkit/main/install.sh \
   | bash -s -- --project architecture-doc-writer
 ```
 
-> Always pass `--user` or `--project` when piping from curl. Without a flag and without a TTY the script defaults to `--user` with a warning — passing the flag explicitly silences it.
+> Non-interactive callers (CI, no TTY) without an explicit flag fall back to `--user` with a warning — pass the flag in those contexts to silence it.
 
 ### Option 2 — clone + install script
 
