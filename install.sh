@@ -17,7 +17,7 @@
 #   ./install.sh --uninstall --user <name>    # remove an installed skill
 #
 # One-liner (no clone):
-#   curl -fsSL https://raw.githubusercontent.com/chuthuong2004/wg-architecture-toolkit/main/install.sh \
+#   curl -fsSL https://raw.githubusercontent.com/chuthuong2004/claude-skills/main/install.sh \
 #     | bash -s -- --user architecture-doc-writer
 
 set -euo pipefail
@@ -38,7 +38,7 @@ err()   { echo "$(color '1;31' '✗') $*" >&2; }
 # When piped from curl, $REPO_DIR points to /dev/fd or doesn't have skills/ — re-fetch the repo.
 if [ ! -d "$SKILLS_SRC" ]; then
   TMPDIR_REPO="$(mktemp -d)"
-  REPO_URL="${SKILL_REPO_URL:-https://github.com/chuthuong2004/wg-architecture-toolkit.git}"
+  REPO_URL="${SKILL_REPO_URL:-https://github.com/chuthuong2004/claude-skills.git}"
   info "Cloning $REPO_URL into $TMPDIR_REPO..."
   git clone --depth 1 "$REPO_URL" "$TMPDIR_REPO" >/dev/null
   REPO_DIR="$TMPDIR_REPO"
@@ -326,7 +326,7 @@ main() {
       --project)    SCOPE="project"; shift ;;
       --link)       mode="link"; shift ;;
       --uninstall)  action="uninstall"; shift ;;
-      -h|--help)    sed -n '2,22p' "$SELF" 2>/dev/null || echo "See https://github.com/chuthuong2004/wg-architecture-toolkit#install"; return ;;
+      -h|--help)    sed -n '2,22p' "$SELF" 2>/dev/null || echo "See https://github.com/chuthuong2004/claude-skills#install"; return ;;
       --)           shift; break ;;
       -*)           err "Unknown flag: $1"; return 1 ;;
       *)            break ;;

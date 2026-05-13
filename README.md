@@ -1,4 +1,4 @@
-# wg-architecture-toolkit
+# claude-skills
 
 A collection of [Claude Code](https://docs.claude.com/en/docs/claude-code) skills for writing **production-grade backend architecture documentation** — event-driven designs, migration plans, component deep-dives, with mandatory Mermaid diagrams, state machines, queue topologies, SQL schema, phased rollouts, risk registers, and SLOs.
 
@@ -34,7 +34,7 @@ If you don't pass a flag, the script asks interactively (it reads from `/dev/tty
 **Recommended — let the script ask:** `cd` into the project you want to scope the skill to (only matters if you pick "project"), then run this single line (copy/paste — no line continuation gotchas):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/chuthuong2004/wg-architecture-toolkit/main/install.sh | bash -s -- architecture-doc-writer
+curl -fsSL https://raw.githubusercontent.com/chuthuong2004/claude-skills/main/install.sh | bash -s -- architecture-doc-writer
 ```
 
 You'll get an arrow-key picker (↑/↓ to move, Enter to confirm, q/Esc to cancel):
@@ -55,11 +55,11 @@ Pick scope (↑/↓ + Enter, q to cancel):
 
 ```bash
 # Always user-level
-curl -fsSL https://raw.githubusercontent.com/chuthuong2004/wg-architecture-toolkit/main/install.sh | bash -s -- --user architecture-doc-writer
+curl -fsSL https://raw.githubusercontent.com/chuthuong2004/claude-skills/main/install.sh | bash -s -- --user architecture-doc-writer
 
 # Always project-level (cd into the project first)
 cd ~/code/my-project
-curl -fsSL https://raw.githubusercontent.com/chuthuong2004/wg-architecture-toolkit/main/install.sh | bash -s -- --project architecture-doc-writer
+curl -fsSL https://raw.githubusercontent.com/chuthuong2004/claude-skills/main/install.sh | bash -s -- --project architecture-doc-writer
 ```
 
 > Non-interactive callers (CI, no TTY) without an explicit flag fall back to `--user` with a warning — pass the flag in those contexts to silence it.
@@ -67,8 +67,8 @@ curl -fsSL https://raw.githubusercontent.com/chuthuong2004/wg-architecture-toolk
 ### Option 2 — clone + install script
 
 ```bash
-git clone https://github.com/chuthuong2004/wg-architecture-toolkit.git
-cd wg-architecture-toolkit
+git clone https://github.com/chuthuong2004/claude-skills.git
+cd claude-skills
 
 ./install.sh                                          # interactive (asks scope, then skill)
 ./install.sh --user all                               # install every skill, user-level
@@ -86,15 +86,15 @@ CLAUDE_SKILLS_DIR=/path/to/skills ./install.sh all
 ### Option 3 — fully manual
 
 ```bash
-git clone https://github.com/chuthuong2004/wg-architecture-toolkit.git
+git clone https://github.com/chuthuong2004/claude-skills.git
 
 # user-level
 mkdir -p ~/.claude/skills
-cp -R wg-architecture-toolkit/skills/architecture-doc-writer ~/.claude/skills/
+cp -R claude-skills/skills/architecture-doc-writer ~/.claude/skills/
 
 # OR project-level
 mkdir -p .claude/skills
-cp -R wg-architecture-toolkit/skills/architecture-doc-writer .claude/skills/
+cp -R claude-skills/skills/architecture-doc-writer .claude/skills/
 ```
 
 After install, **restart Claude Code** (or open a new session) so the skills are picked up.
@@ -118,7 +118,7 @@ Open Claude Code and type `/architecture-doc-writer` — the skill should appear
 ## Updating
 
 ```bash
-cd wg-architecture-toolkit && git pull
+cd claude-skills && git pull
 ./install.sh --user all      # re-copy on top of the existing user install
 ./install.sh --project all   # …or project install (from inside the target repo)
 ```
