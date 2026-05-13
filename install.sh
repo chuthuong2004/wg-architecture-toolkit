@@ -75,11 +75,21 @@ confirm() {
 # Arrow-key menu. Args: title, then options.
 # Sets PICK_RESULT to the chosen 0-based index. Returns 1 if cancelled or no TTY.
 # Controls: ↑/↓ or k/j to move, Enter to confirm, Esc/q to cancel.
+#
+# Each option is truncated to fit the terminal width — a wrapped line would
+# desync the cursor-rewind math and produce stacked, garbled output.
 _pick_saved_tty=""
 _pick_cleanup() {
   [ -n "$_pick_saved_tty" ] && stty "$_pick_saved_tty" < /dev/tty 2>/dev/null
   printf '\e[?25h' > /dev/tty 2>/dev/null || true
   _pick_saved_tty=""
+}
+
+term_cols() {
+  local c=""
+  c=$(tput cols 2>/dev/null) || c=""
+  [ -z "$c" ] && c="${COLUMNS:-80}"
+  echo "${c:-80}"
 }
 
 arrow_pick() {
@@ -90,13 +100,30 @@ arrow_pick() {
 
   if ! have_tty || [ "$count" -eq 0 ]; then return 1; fi
 
+  local cols max_label
+  cols=$(term_cols)
+  max_label=$((cols - 3))     # leave room for "> " prefix and a safety col
+  [ "$max_label" -lt 10 ] && max_label=10
+
   _pick_saved_tty=$(stty -g < /dev/tty 2>/dev/null) || { _pick_saved_tty=""; return 1; }
   trap '_pick_cleanup' EXIT INT TERM
   stty -icanon -echo min 1 time 0 < /dev/tty
   printf '\e[?25l' > /dev/tty
 
-  printf '%s\n' "$title" > /dev/tty
+  # Truncate every option once up-front.
   local i
+  for ((i=0; i<count; i++)); do
+    if [ "${#options[$i]}" -gt "$max_label" ]; then
+      options[$i]="${options[$i]:0:$((max_label-1))}…"
+    fi
+  done
+
+  # Truncate title too so it doesn't wrap.
+  if [ "${#title}" -gt "$cols" ]; then
+    title="${title:0:$((cols-1))}…"
+  fi
+
+  printf '%s\n' "$title" > /dev/tty
   for ((i=0; i<count; i++)); do printf '\n' > /dev/tty; done
   printf '\e[%dA' "$count" > /dev/tty
 
@@ -107,7 +134,7 @@ arrow_pick() {
     fi
     first=0
     for ((i=0; i<count; i++)); do
-      printf '\e[K' > /dev/tty
+      printf '\e[2K\r' > /dev/tty
       if [ "$i" -eq "$selected" ]; then
         printf '\e[7m> %s\e[0m\n' "${options[$i]}" > /dev/tty
       else
@@ -147,20 +174,26 @@ ask_scope() {
     SCOPE="user"
     return
   fi
-  if arrow_pick "Where do you want to install the skill(s)? (↑/↓ + Enter)" \
-      "user    — $HOME/.claude/skills            (available in every project)" \
-      "project — $PWD/.claude/skills   (scoped to this project)"; then
+  {
+    echo
+    echo "Install destination:"
+    echo "  user    → $HOME/.claude/skills"
+    echo "  project → $PWD/.claude/skills"
+    echo
+  } > /dev/tty
+  if arrow_pick "Pick scope (↑/↓ + Enter, q to cancel):" \
+      "user      (global — available in every project)" \
+      "project   (scoped to current directory)"; then
     case "$PICK_RESULT" in
       0) SCOPE="user" ;;
       1) SCOPE="project" ;;
     esac
     return
   fi
-  # arrow_pick failed/cancelled — fall back to numbered prompt.
+  # arrow_pick failed/cancelled → numbered prompt fallback.
   {
-    echo "Where do you want to install the skill(s)?"
-    echo "  1) user    — $HOME/.claude/skills            (available in every project)"
-    echo "  2) project — $PWD/.claude/skills   (scoped to this project)"
+    echo "  1) user"
+    echo "  2) project"
   } > /dev/tty
   local ans
   read_tty "Pick [1/2] (default 1): " ans
