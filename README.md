@@ -1,83 +1,103 @@
 # claude-skills
 
-A collection of [Claude Code](https://docs.claude.com/en/docs/claude-code) skills for writing **production-grade backend architecture documentation**.
+A curated collection of [Claude Code](https://docs.claude.com/en/docs/claude-code) **skills** and **subagents** — opinionated, production-grade, install-on-demand.
 
-Each skill enforces a strict, opinionated structure — mandatory Mermaid diagrams, state machines, queue topologies, SQL schema, phased rollouts, risk registers, and SLOs — so the output is consistent across projects and teams.
-
-> Originally extracted from the `wg-marketing-be` codebase (live-stream + SMM platform) so other projects can produce architecture docs of the same depth and shape.
+Each item is self-contained and installs with one command. Nothing is auto-installed; the installer always asks (or requires) which scope and which item.
 
 ---
 
-## Skills in this repo
+## What's in the repo
+
+### Skills (`skills/<name>/`)
+
+Skills are workflow recipes. They trigger automatically on matching prompts (or via `/<name>`) and enforce a strict output structure.
 
 | Skill | What it does |
 |---|---|
-| [`architecture-doc-writer`](skills/architecture-doc-writer/) | Generates full HLDs, migration plans, and component deep-dives with diagrams and trade-off tables. |
+| [`architecture-doc-writer`](skills/architecture-doc-writer/) | Generates full backend HLDs, migration plans, and component deep-dives — Mermaid diagrams, state machines, queue topology, SQL schema, phased rollouts, risk registers, SLOs. Triggers on *"viết tài liệu kiến trúc"*, *"architecture doc"*, *"system design"*, *"HLD"*, *"migration plan"*, *"RFC"*. |
 
-**Triggers on phrases like:**
-*"viết tài liệu kiến trúc"*, *"architecture doc"*, *"system design"*, *"HLD"*, *"migration plan"*, *"RFC"*.
+### Subagents (`agents/<name>.md`)
 
-More skills will be added here (ER design helper, runbook writer, API doc writer, …) without breaking install.
+Subagents are specialist personas you can delegate to (`Task` tool) or that Claude can use proactively. Each one lives in its own context window.
+
+| Agent | What it does |
+|---|---|
+| [`seo-expert`](agents/seo-expert.md) | Technical SEO specialist for **Next.js App Router** projects — metadata API, JSON-LD, sitemaps, robots, canonical/hreflang, image SEO, Core Web Vitals, i18n. Audits new pages and PRs for SEO regressions. Model: `sonnet`. |
+
+> More items will be added without breaking existing installs. The installer only touches the item(s) you name.
 
 ---
 
 ## Install
 
-### Pick a scope first
+### Step 1 — Pick a scope
 
-Each skill can be installed at one of two scopes:
-
-| Scope | Path | When to use |
+| Scope | Where it goes | When to use |
 |---|---|---|
-| `--user` | `~/.claude/skills/<name>/` | Available in **every project** on your machine. |
-| `--project` | `$PWD/.claude/skills/<name>/` | Scoped to **one repo** — commit it so teammates get it on clone. |
+| `--user` | `~/.claude/skills/<name>/` and `~/.claude/agents/<name>.md` | Available in **every project** on your machine. |
+| `--project` | `$PWD/.claude/skills/<name>/` and `$PWD/.claude/agents/<name>.md` | Scoped to **one repo** — commit it so teammates get it on clone. |
 
-If you don't pass a flag, the installer asks interactively.
+If you don't pass a flag, the installer asks interactively (arrow-key picker, reads from `/dev/tty` so it works under `curl | bash`).
 
-> The prompt reads from `/dev/tty`, so it works even under `curl | bash`.
-> The env var `CLAUDE_SKILLS_DIR=/path` overrides both scopes.
+Override env vars:
+
+```bash
+CLAUDE_SKILLS_DIR=/path/to/skills    # overrides skills destination
+CLAUDE_AGENTS_DIR=/path/to/agents    # overrides agents destination
+```
+
+### Step 2 — Pick what to install
+
+Pass the name(s) of skills/agents as arguments. **Nothing is installed unless you name it** (or pass `all-skills` / `all-agents`).
+
+```bash
+# One item (agent)
+./install.sh --user seo-expert
+
+# One item (skill)
+./install.sh --project architecture-doc-writer
+
+# Multiple items, mixed types
+./install.sh --user seo-expert architecture-doc-writer
+
+# Everything of one type
+./install.sh --user all-skills
+./install.sh --user all-agents
+```
+
+> `all` by itself is **not supported** — use `all-skills` or `all-agents` explicitly so you never install something you didn't ask for.
 
 ---
 
 ### Option 1 — One-liner (no clone)
 
-**Recommended.** `cd` into the project you want to scope the skill to (only matters if you pick *project*), then run:
+`cd` into the project you want to scope to (only matters for `--project`), then:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/chuthuong2004/claude-skills/main/install.sh | bash -s -- architecture-doc-writer
+curl -fsSL https://raw.githubusercontent.com/chuthuong2004/claude-skills/main/install.sh | bash -s -- seo-expert
 ```
 
-You'll get an arrow-key picker:
+You'll get an arrow-key scope picker:
 
 ```
 Install destination:
-  user    → /Users/you/.claude/skills
-  project → /current/dir/.claude/skills
+  user    → /Users/you/.claude/{skills,agents}
+  project → /current/dir/.claude/{skills,agents}
 
 Pick scope (↑/↓ + Enter, q to cancel):
 > user      (global — available in every project)
   project   (scoped to current directory)
 ```
 
-Controls: `↑/↓` move, `Enter` confirm, `q`/`Esc` cancel.
-(Falls back to a numbered prompt if your terminal doesn't support raw input.)
+Controls: `↑/↓` move, `Enter` confirm, `q`/`Esc` cancel. Falls back to a numbered prompt if the terminal can't do raw input.
 
-#### Skip the prompt
-
-Pass `--user` or `--project` explicitly:
+Skip the prompt with an explicit flag:
 
 ```bash
-# Always user-level
-curl -fsSL https://raw.githubusercontent.com/chuthuong2004/claude-skills/main/install.sh | bash -s -- --user architecture-doc-writer
+curl -fsSL https://raw.githubusercontent.com/chuthuong2004/claude-skills/main/install.sh | bash -s -- --user seo-expert
 ```
 
-```bash
-# Always project-level (cd into the project first)
-cd ~/code/my-project
-curl -fsSL https://raw.githubusercontent.com/chuthuong2004/claude-skills/main/install.sh | bash -s -- --project architecture-doc-writer
-```
-
-> **CI / no-TTY callers:** without an explicit flag, the installer falls back to `--user` with a warning. Pass the flag to silence it.
+> **CI / no-TTY:** without an explicit flag, the installer defaults to `--user` and prints a warning. Pass the flag to silence it.
 
 ---
 
@@ -86,31 +106,25 @@ curl -fsSL https://raw.githubusercontent.com/chuthuong2004/claude-skills/main/in
 ```bash
 git clone https://github.com/chuthuong2004/claude-skills.git
 cd claude-skills
-```
 
-Then run the installer:
-
-```bash
-# Interactive — asks scope, then skill
+# Interactive — asks scope, lists every skill and agent, you pick one
 ./install.sh
 
-# Install everything, user-level
-./install.sh --user all
+# Named install (mixed types allowed)
+./install.sh --user seo-expert
+./install.sh --project architecture-doc-writer seo-expert
 
-# One skill, project-level (CWD)
-./install.sh --project architecture-doc-writer
+# Symlink for live-edit (great if you're contributing back)
+./install.sh --link --user seo-expert
 
-# Symlink instead of copy (live-edit)
-./install.sh --link --user architecture-doc-writer
-
-# Uninstall
-./install.sh --uninstall --user architecture-doc-writer
+# Uninstall (auto-detects skill vs agent by name)
+./install.sh --uninstall --user seo-expert
 ```
 
 Override the destination entirely:
 
 ```bash
-CLAUDE_SKILLS_DIR=/path/to/skills ./install.sh all
+CLAUDE_SKILLS_DIR=/tmp/skills CLAUDE_AGENTS_DIR=/tmp/agents ./install.sh seo-expert
 ```
 
 ---
@@ -121,43 +135,42 @@ CLAUDE_SKILLS_DIR=/path/to/skills ./install.sh all
 git clone https://github.com/chuthuong2004/claude-skills.git
 ```
 
-**User-level:**
+**Skill (user-level):**
 
 ```bash
 mkdir -p ~/.claude/skills
 cp -R claude-skills/skills/architecture-doc-writer ~/.claude/skills/
 ```
 
-**Project-level:**
+**Agent (user-level):**
 
 ```bash
-mkdir -p .claude/skills
-cp -R claude-skills/skills/architecture-doc-writer .claude/skills/
+mkdir -p ~/.claude/agents
+cp claude-skills/agents/seo-expert.md ~/.claude/agents/
 ```
 
-> After install, **restart Claude Code** (or open a new session) so the skills are picked up.
+For project-level, swap `~/.claude/...` with `./.claude/...` while inside the target repo.
+
+> After install, **restart Claude Code** (or open a new session) so the items are picked up.
 
 ---
 
 ## Verify install
 
-Check the files are in place:
-
 ```bash
 # User-level
 ls ~/.claude/skills/architecture-doc-writer
+ls ~/.claude/agents/seo-expert.md
 
 # Project-level
 ls ./.claude/skills/architecture-doc-writer
-
-# Expected output:
-# SKILL.md  assets/  references/
+ls ./.claude/agents/seo-expert.md
 ```
 
 Then open Claude Code and either:
 
-- Type `/architecture-doc-writer` — the skill should appear in the slash-command list, **or**
-- Prompt naturally: *"viết tài liệu kiến trúc cho hệ thống X"* — the skill auto-triggers.
+- **Skill** — type `/architecture-doc-writer`, or prompt naturally (*"viết tài liệu kiến trúc cho hệ thống X"*) — it auto-triggers.
+- **Agent** — Claude will route SEO-related tasks to `seo-expert` proactively, or you can ask explicitly: *"use the seo-expert agent to audit `app/blog/[slug]/page.tsx`"*.
 
 ---
 
@@ -167,11 +180,12 @@ Then open Claude Code and either:
 cd claude-skills && git pull
 ```
 
-Then re-run the install:
+Then re-run install for the item(s) you care about:
 
 ```bash
-./install.sh --user all      # re-copy on top of the existing user install
-./install.sh --project all   # …or project install (from inside the target repo)
+./install.sh --user seo-expert
+./install.sh --user all-skills      # refresh every skill
+./install.sh --user all-agents      # refresh every agent
 ```
 
 > If you installed with `--link`, `git pull` alone is enough — the symlink already points at the repo.
@@ -180,21 +194,17 @@ Then re-run the install:
 
 ## Uninstalling
 
-Via the installer:
-
 ```bash
-# Remove user-level
-./install.sh --uninstall --user architecture-doc-writer
-
-# Remove project-level (run inside the project)
+# Specific item (auto-routes to skills/ or agents/)
+./install.sh --uninstall --user seo-expert
 ./install.sh --uninstall --project architecture-doc-writer
 ```
 
-Or just delete the directory:
+Or remove the file/dir directly:
 
 ```bash
+rm    ~/.claude/agents/seo-expert.md
 rm -rf ~/.claude/skills/architecture-doc-writer
-rm -rf ./.claude/skills/architecture-doc-writer
 ```
 
 ---
@@ -206,33 +216,32 @@ rm -rf ./.claude/skills/architecture-doc-writer
 ├── README.md
 ├── LICENSE
 ├── install.sh
+├── agents/
+│   └── seo-expert.md                    # → ~/.claude/agents/seo-expert.md
 └── skills/
-    └── architecture-doc-writer/
-        ├── SKILL.md             # entry point + workflow + trigger rules
-        ├── references/          # loaded on demand by Claude
-        │   ├── section-checklist.md
-        │   ├── diagram-patterns.md
-        │   ├── sql-patterns.md
-        │   └── event-driven-patterns.md
-        └── assets/              # skeleton templates
-            ├── template-architecture.md
-            ├── template-migration-plan.md
-            └── template-component-deepdive.md
+    └── architecture-doc-writer/         # → ~/.claude/skills/architecture-doc-writer/
+        ├── SKILL.md
+        ├── references/
+        └── assets/
 ```
 
 ---
 
-## Contributing a new skill
+## Contributing
 
-1. Add a new directory under `skills/<your-skill-name>/`.
+**Adding a skill:**
+1. New dir under `skills/<your-skill-name>/`.
 2. Create `SKILL.md` with YAML frontmatter (`name`, `description`).
-3. Optionally add:
-   - `references/` — loaded on demand.
-   - `assets/` — skeleton templates.
-4. Add a row to the **Skills in this repo** table above.
-5. Open a PR.
+3. Optional: `references/` (loaded on demand), `assets/` (templates).
+4. Add a row to the **Skills** table above.
 
-See the [Claude skill format docs](https://docs.claude.com/en/docs/claude-code/skills) for the full schema.
+**Adding a subagent:**
+1. New file at `agents/<your-agent-name>.md`.
+2. YAML frontmatter must include `name`, `description`, and optionally `model` (`sonnet` / `opus` / `haiku`).
+3. Body is the system prompt for the agent — be specific about when to use it, what to inspect, and what conventions to follow.
+4. Add a row to the **Subagents** table above.
+
+See the [skills docs](https://docs.claude.com/en/docs/claude-code/skills) and [subagents docs](https://docs.claude.com/en/docs/claude-code/sub-agents) for the full schema.
 
 ---
 

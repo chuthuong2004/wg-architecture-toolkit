@@ -1,24 +1,30 @@
 #!/usr/bin/env bash
-# Install one or more skills from this repo into a Claude Code skills dir.
+# Install one or more skills or subagents from this repo into a Claude Code config dir.
 #
-# Scope (where the skill is installed):
-#   --user      Install to $HOME/.claude/skills/   (available in every project)
-#   --project   Install to $PWD/.claude/skills/    (scoped to the current repo)
+# Items in this repo:
+#   skills/<name>/        → installed to <root>/.claude/skills/<name>/
+#   agents/<name>.md      → installed to <root>/.claude/agents/<name>.md
+#
+# Scope (where <root> lives):
+#   --user      $HOME           (available in every project)
+#   --project   $PWD            (scoped to the current repo)
 #   (no flag)   Ask interactively (↑/↓ arrow-key picker, falls back to numbered prompt).
-#   CLAUDE_SKILLS_DIR=... overrides both flags and the prompt.
+#   CLAUDE_SKILLS_DIR=... overrides the skills destination.
+#   CLAUDE_AGENTS_DIR=... overrides the agents destination.
 #
 # Usage:
-#   ./install.sh                              # interactive — pick scope, then skill(s)
-#   ./install.sh all                          # install everything (asks scope)
-#   ./install.sh architecture-doc-writer ...  # install named skills (asks scope)
-#   ./install.sh --user architecture-doc-writer
-#   ./install.sh --project architecture-doc-writer
+#   ./install.sh                              # interactive — pick scope, then one item
+#   ./install.sh all-skills                   # install every skill (asks scope)
+#   ./install.sh all-agents                   # install every agent (asks scope)
+#   ./install.sh seo-expert architecture-doc-writer
+#   ./install.sh --user seo-expert
+#   ./install.sh --project seo-expert
 #   ./install.sh --link --project <name>      # symlink instead of copy (good for dev)
-#   ./install.sh --uninstall --user <name>    # remove an installed skill
+#   ./install.sh --uninstall --user <name>    # remove an installed item
 #
 # One-liner (no clone):
 #   curl -fsSL https://raw.githubusercontent.com/chuthuong2004/claude-skills/main/install.sh \
-#     | bash -s -- --user architecture-doc-writer
+#     | bash -s -- --user seo-expert
 
 set -euo pipefail
 
@@ -28,6 +34,7 @@ set -euo pipefail
 SELF="${BASH_SOURCE[0]:-$0}"
 REPO_DIR="$( cd "$( dirname "$SELF" )" 2>/dev/null && pwd || echo "" )"
 SKILLS_SRC="$REPO_DIR/skills"
+AGENTS_SRC="$REPO_DIR/agents"
 
 color() { printf '\033[%sm%s\033[0m' "$1" "$2"; }
 info()  { echo "$(color '1;34' '→') $*"; }
@@ -43,9 +50,34 @@ if [ ! -d "$SKILLS_SRC" ]; then
   git clone --depth 1 "$REPO_URL" "$TMPDIR_REPO" >/dev/null
   REPO_DIR="$TMPDIR_REPO"
   SKILLS_SRC="$REPO_DIR/skills"
+  AGENTS_SRC="$REPO_DIR/agents"
 fi
 
 list_skills() { ls -1 "$SKILLS_SRC" 2>/dev/null | sort; }
+
+list_agents() {
+  [ -d "$AGENTS_SRC" ] || return 0
+  local f
+  for f in "$AGENTS_SRC"/*.md; do
+    [ -e "$f" ] || continue
+    basename "$f" .md
+  done | sort
+}
+
+# Echoes "skill", "agent", or "" (not found). Skill names take precedence on
+# unlikely collisions, but we warn if both exist for the same name.
+item_type() {
+  local name="$1"
+  local in_skills=0 in_agents=0
+  [ -d "$SKILLS_SRC/$name" ] && in_skills=1
+  [ -f "$AGENTS_SRC/$name.md" ] && in_agents=1
+  if [ "$in_skills" -eq 1 ] && [ "$in_agents" -eq 1 ]; then
+    warn "Name collision: '$name' exists as both a skill and an agent — installing the skill." >&2
+  fi
+  if [ "$in_skills" -eq 1 ]; then echo "skill"; return; fi
+  if [ "$in_agents" -eq 1 ]; then echo "agent"; return; fi
+  echo ""
+}
 
 # Probe whether /dev/tty is actually usable. `[ -e /dev/tty ]` lies in non-interactive
 # environments where the device node exists but the process has no controlling terminal.
@@ -176,15 +208,15 @@ arrow_pick() {
 ask_scope() {
   if ! have_tty; then
     warn "No TTY detected; defaulting to --user."
-    warn "Pass --user or --project explicitly (or set CLAUDE_SKILLS_DIR) to silence this."
+    warn "Pass --user or --project explicitly (or set CLAUDE_SKILLS_DIR / CLAUDE_AGENTS_DIR) to silence this."
     SCOPE="user"
     return
   fi
   {
     echo
     echo "Install destination:"
-    echo "  user    → $HOME/.claude/skills"
-    echo "  project → $PWD/.claude/skills"
+    echo "  user    → $HOME/.claude/{skills,agents}"
+    echo "  project → $PWD/.claude/{skills,agents}"
     echo
   } > /dev/tty
   arrow_pick "Pick scope (↑/↓ + Enter, q to cancel):" \
@@ -213,34 +245,47 @@ ask_scope() {
 }
 
 resolve_dst() {
-  # Precedence: $CLAUDE_SKILLS_DIR > explicit flag > interactive prompt.
-  if [ -n "${CLAUDE_SKILLS_DIR:-}" ]; then
-    SKILLS_DST="$CLAUDE_SKILLS_DIR"
-    SCOPE="custom"
-    return
-  fi
-  if [ -z "${SCOPE:-}" ]; then
+  # CLAUDE_SKILLS_DIR / CLAUDE_AGENTS_DIR override per-type; otherwise scope decides.
+  if [ -z "${SCOPE:-}" ] && [ -z "${CLAUDE_SKILLS_DIR:-}" ] && [ -z "${CLAUDE_AGENTS_DIR:-}" ]; then
     ask_scope
   fi
-  case "$SCOPE" in
-    user)    SKILLS_DST="$HOME/.claude/skills" ;;
-    project) SKILLS_DST="$PWD/.claude/skills" ;;
+  case "${SCOPE:-}" in
+    user)    SKILLS_DST="$HOME/.claude/skills"; AGENTS_DST="$HOME/.claude/agents" ;;
+    project) SKILLS_DST="$PWD/.claude/skills";  AGENTS_DST="$PWD/.claude/agents"  ;;
+    "")      ;;  # scope wasn't asked because env overrides cover both — handled below
     *)       err "Unknown scope: $SCOPE"; exit 1 ;;
   esac
+  [ -n "${CLAUDE_SKILLS_DIR:-}" ] && SKILLS_DST="$CLAUDE_SKILLS_DIR"
+  [ -n "${CLAUDE_AGENTS_DIR:-}" ] && AGENTS_DST="$CLAUDE_AGENTS_DIR"
+  # If only one of the env vars was set, fill the other from $HOME as a safe default.
+  : "${SKILLS_DST:=$HOME/.claude/skills}"
+  : "${AGENTS_DST:=$HOME/.claude/agents}"
 }
 
 install_one() {
   local name="$1"
   local mode="${2:-copy}"  # copy | link
-  local src="$SKILLS_SRC/$name"
-  local dst="$SKILLS_DST/$name"
+  local type
+  type=$(item_type "$name")
+  local src dst dst_root
+  case "$type" in
+    skill)
+      src="$SKILLS_SRC/$name"
+      dst_root="$SKILLS_DST"
+      dst="$dst_root/$name"
+      ;;
+    agent)
+      src="$AGENTS_SRC/$name.md"
+      dst_root="$AGENTS_DST"
+      dst="$dst_root/$name.md"
+      ;;
+    *)
+      err "Item '$name' not found. Available skills: $(list_skills | tr '\n' ' '). Available agents: $(list_agents | tr '\n' ' ')."
+      return 1
+      ;;
+  esac
 
-  if [ ! -d "$src" ]; then
-    err "Skill '$name' not found in repo. Available: $(list_skills | tr '\n' ' ')"
-    return 1
-  fi
-
-  mkdir -p "$SKILLS_DST"
+  mkdir -p "$dst_root"
 
   if [ -e "$dst" ] || [ -L "$dst" ]; then
     warn "$dst already exists."
@@ -250,16 +295,33 @@ install_one() {
 
   if [ "$mode" = "link" ]; then
     ln -s "$src" "$dst"
-    ok "Linked $name → $dst"
+    ok "Linked $type $name → $dst"
   else
     cp -R "$src" "$dst"
-    ok "Installed $name → $dst"
+    ok "Installed $type $name → $dst"
   fi
 }
 
 uninstall_one() {
   local name="$1"
-  local dst="$SKILLS_DST/$name"
+  local type
+  type=$(item_type "$name")
+  local dst
+  case "$type" in
+    skill) dst="$SKILLS_DST/$name" ;;
+    agent) dst="$AGENTS_DST/$name.md" ;;
+    *)
+      # Item is no longer in the repo (rare) — try both destinations.
+      if [ -e "$SKILLS_DST/$name" ] || [ -L "$SKILLS_DST/$name" ]; then
+        dst="$SKILLS_DST/$name"
+      elif [ -e "$AGENTS_DST/$name.md" ] || [ -L "$AGENTS_DST/$name.md" ]; then
+        dst="$AGENTS_DST/$name.md"
+      else
+        warn "$name is not installed (checked skills and agents)."
+        return 0
+      fi
+      ;;
+  esac
   if [ ! -e "$dst" ] && [ ! -L "$dst" ]; then
     warn "$name is not installed at $dst."
     return 0
@@ -269,23 +331,24 @@ uninstall_one() {
 }
 
 interactive_pick() {
-  local skills=()
-  while IFS= read -r line; do skills+=("$line"); done < <(list_skills)
-  if [ "${#skills[@]}" -eq 0 ]; then
-    err "No skills found in $SKILLS_SRC"
+  local items=() labels=()
+  local s a
+  while IFS= read -r s; do
+    [ -n "$s" ] && items+=("$s") && labels+=("$s  (skill)")
+  done < <(list_skills)
+  while IFS= read -r a; do
+    [ -n "$a" ] && items+=("$a") && labels+=("$a  (agent)")
+  done < <(list_agents)
+
+  if [ "${#items[@]}" -eq 0 ]; then
+    err "No skills or agents found in $REPO_DIR"
     exit 1
   fi
 
   if have_tty; then
-    local menu=( "${skills[@]}" "all (install every skill)" )
-    arrow_pick "Pick a skill to install (↑/↓ + Enter, q to cancel):" "${menu[@]}"
+    arrow_pick "Pick a skill or agent to install (↑/↓ + Enter, q to cancel):" "${labels[@]}"
     case $? in
-      0) if [ "$PICK_RESULT" -eq "${#skills[@]}" ]; then
-           for s in "${skills[@]}"; do install_one "$s"; done
-         else
-           install_one "${skills[$PICK_RESULT]}"
-         fi
-         return ;;
+      0) install_one "${items[$PICK_RESULT]}"; return ;;
       1) info "Cancelled."; exit 130 ;;
       2) ;;  # stty failed — fall through to numbered prompt below
     esac
@@ -293,25 +356,20 @@ interactive_pick() {
 
   # No TTY: numbered prompt fallback (still supports comma-separated multi-select).
   {
-    echo "Available skills:"
+    echo "Available:"
     local i=1
-    for s in "${skills[@]}"; do
-      echo "  $i) $s"
+    for l in "${labels[@]}"; do
+      echo "  $i) $l"
       i=$((i+1))
     done
-    echo "  a) all"
   } >&2
   local pick
-  read_tty 'Pick (number, comma-separated, or "a"): ' pick
+  read_tty 'Pick (number or comma-separated): ' pick
   if [ -z "$pick" ]; then info "Nothing selected."; exit 0; fi
-  if [ "$pick" = "a" ] || [ "$pick" = "all" ]; then
-    for s in "${skills[@]}"; do install_one "$s"; done
-    return
-  fi
   IFS=',' read -r -a picks <<< "$pick"
   for p in "${picks[@]}"; do
     p="${p// /}"
-    install_one "${skills[$((p-1))]}"
+    install_one "${items[$((p-1))]}"
   done
 }
 
@@ -326,7 +384,7 @@ main() {
       --project)    SCOPE="project"; shift ;;
       --link)       mode="link"; shift ;;
       --uninstall)  action="uninstall"; shift ;;
-      -h|--help)    sed -n '2,22p' "$SELF" 2>/dev/null || echo "See https://github.com/chuthuong2004/claude-skills#install"; return ;;
+      -h|--help)    sed -n '2,30p' "$SELF" 2>/dev/null || echo "See https://github.com/chuthuong2004/claude-skills#install"; return ;;
       --)           shift; break ;;
       -*)           err "Unknown flag: $1"; return 1 ;;
       *)            break ;;
@@ -336,7 +394,7 @@ main() {
   resolve_dst
 
   if [ "$action" = "uninstall" ]; then
-    if [ $# -eq 0 ]; then err "--uninstall requires at least one skill name."; return 1; fi
+    if [ $# -eq 0 ]; then err "--uninstall requires at least one skill/agent name."; return 1; fi
     for n in "$@"; do uninstall_one "$n"; done
     return
   fi
@@ -346,14 +404,25 @@ main() {
     return
   fi
 
-  if [ "${1:-}" = "all" ]; then
-    while IFS= read -r s; do install_one "$s" "$mode"; done < <(list_skills)
-    return
-  fi
-
-  for n in "$@"; do install_one "$n" "$mode"; done
+  for arg in "$@"; do
+    case "$arg" in
+      all-skills)
+        while IFS= read -r s; do install_one "$s" "$mode"; done < <(list_skills)
+        ;;
+      all-agents)
+        while IFS= read -r a; do install_one "$a" "$mode"; done < <(list_agents)
+        ;;
+      all)
+        err "'all' is no longer supported — use 'all-skills' or 'all-agents' (or list items explicitly)."
+        return 1
+        ;;
+      *)
+        install_one "$arg" "$mode"
+        ;;
+    esac
+  done
 }
 
 main "$@"
 echo
-info "Done. Restart Claude Code (or open a new session) so the skills are loaded."
+info "Done. Restart Claude Code (or open a new session) so the items are loaded."
