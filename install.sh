@@ -1,23 +1,34 @@
 #!/usr/bin/env bash
-# Install skills/subagents from this repo into Claude Code or Cursor.
+# Install skills/subagents from this repo into Claude Code or Cursor,
+# and optionally bootstrap a project tree (README, CLAUDE.md, AGENTS.md,
+# docs/, .claude/) at $PWD.
 #
 # Items in this repo:
 #   skills/<name>/        — workflow recipes with refs/assets
 #   agents/<name>.md      — single-file subagent personas
+#   scaffold/             — starter project tree used by --init
 #
 # Targets:
 #   Claude Code  → <root>/.claude/skills/<name>/   and   <root>/.claude/agents/<name>.md
 #   Cursor       → <PWD>/AGENTS.md  (each item appended as a section, idempotent)
 #
+# Bootstrap (--init):
+#   Lays down a starter project tree at $PWD — README.md, CLAUDE.md, AGENTS.md,
+#   docs/{architecture,changelogs,plans}/, .claude/{config.md,agents,commands,
+#   shared,outputs,skills,templates}/. Existing files are skipped unless --force.
+#
 # Interactive flow (run with no args, e.g. via `curl | bash`):
 #   1) Pick target AI: Claude Code or Cursor
-#   2) (Claude only) Pick scope: --user or --project
-#   3) Pick item(s) to install — multi-select, Space toggles, Enter confirms
+#   2) Ask "Bootstrap project structure?" — Yes/No
+#   3) (Claude only) Pick scope: --user or --project
+#   4) Pick item(s) to install — multi-select, Space toggles, Enter confirms
 #
 # Non-interactive flags:
 #   --claude | --cursor         Skip the target picker.
 #   --user | --project          (Claude only) skip the scope picker.
 #   --link                      Symlink instead of copy (Claude only).
+#   --init                      Bootstrap the project tree at $PWD (skips existing files).
+#   --force                     Overwrite existing files during --init.
 #   --uninstall                 Remove named item(s).
 #   --cursor-file PATH          Override Cursor AGENTS.md path (default: $PWD/AGENTS.md).
 #   CLAUDE_SKILLS_DIR=...       Override Claude skills destination.
@@ -32,6 +43,9 @@
 #   curl -fsSL https://raw.githubusercontent.com/chuthuong2004/claude-skills/main/install.sh | bash
 #   ./install.sh --claude --user seo-expert
 #   ./install.sh --cursor seo-expert architecture-doc-writer
+#   ./install.sh --claude --project --init                    # bootstrap only
+#   ./install.sh --claude --project --init seo-expert         # bootstrap + install agent
+#   ./install.sh --claude --project --init --force            # overwrite existing files
 #   ./install.sh --uninstall --claude --user seo-expert
 
 set -euo pipefail
@@ -40,6 +54,7 @@ SELF="${BASH_SOURCE[0]:-$0}"
 REPO_DIR="$( cd "$( dirname "$SELF" )" 2>/dev/null && pwd || echo "" )"
 SKILLS_SRC="$REPO_DIR/skills"
 AGENTS_SRC="$REPO_DIR/agents"
+SCAFFOLD_SRC="$REPO_DIR/scaffold"
 
 color() { printf '\033[%sm%s\033[0m' "$1" "$2"; }
 info()  { echo "$(color '1;34' '→') $*"; }
@@ -56,6 +71,7 @@ if [ ! -d "$SKILLS_SRC" ]; then
   REPO_DIR="$TMPDIR_REPO"
   SKILLS_SRC="$REPO_DIR/skills"
   AGENTS_SRC="$REPO_DIR/agents"
+  SCAFFOLD_SRC="$REPO_DIR/scaffold"
 fi
 
 list_skills() { ls -1 "$SKILLS_SRC" 2>/dev/null | sort; }
@@ -538,6 +554,86 @@ uninstall_one_cursor() {
   ok "Removed section '$name' from $CURSOR_AGENTS_FILE"
 }
 
+# ---- Bootstrap (project scaffold) ------------------------------------------
+
+# Copy scaffold/ into the destination directory.
+# - Skips files that already exist (unless BOOTSTRAP_MODE=force).
+# - Creates parent directories as needed.
+# - Copies .gitkeep markers so empty directories survive in git.
+bootstrap_project() {
+  local dst="${1:-$PWD}"
+  local mode="${BOOTSTRAP_MODE:-skip}"   # skip | force
+
+  if [ ! -d "$SCAFFOLD_SRC" ]; then
+    err "scaffold/ directory not found in $REPO_DIR — cannot bootstrap."
+    return 1
+  fi
+
+  info "Bootstrapping project tree into $dst"
+  if [ "$mode" = "force" ]; then
+    warn "Conflict mode: force — existing files will be overwritten."
+  else
+    info "Conflict mode: skip — existing files are kept. Pass --force to overwrite."
+  fi
+
+  local copied=0 skipped=0 overwritten=0
+  local rel src target
+
+  while IFS= read -r src; do
+    rel="${src#$SCAFFOLD_SRC/}"
+    target="$dst/$rel"
+
+    if [ -e "$target" ]; then
+      if [ "$mode" = "force" ]; then
+        mkdir -p "$(dirname "$target")"
+        cp "$src" "$target"
+        overwritten=$((overwritten + 1))
+      else
+        skipped=$((skipped + 1))
+      fi
+    else
+      mkdir -p "$(dirname "$target")"
+      cp "$src" "$target"
+      copied=$((copied + 1))
+    fi
+  done < <(find "$SCAFFOLD_SRC" -type f 2>/dev/null)
+
+  ok "Bootstrap done — $copied new, $overwritten overwritten, $skipped skipped."
+  if [ "$skipped" -gt 0 ] && [ "$mode" != "force" ]; then
+    info "Re-run with --force to overwrite the $skipped existing file(s)."
+  fi
+
+  # Friendly next-steps for the user.
+  echo
+  echo "Next steps:"
+  echo "  1. Edit .claude/config.md and replace <placeholder> values with your project's specifics."
+  echo "  2. Replace <PROJECT_NAME> placeholders in README.md (\`grep -RIn '<PROJECT_NAME>' .\`)."
+  echo "  3. Open AGENTS.md and review the contract before your next commit."
+}
+
+# Interactive: ask whether to bootstrap. Returns 0 = yes, 1 = no.
+ask_bootstrap() {
+  if ! have_tty; then return 1; fi
+  echo > /dev/tty
+  {
+    echo "Bootstrap a project tree at:"
+    echo "  $PWD"
+    echo "(Adds README.md, CLAUDE.md, AGENTS.md, docs/, .claude/ — existing files are skipped.)"
+    echo
+  } > /dev/tty
+  arrow_pick "Bootstrap project structure? (↑/↓ + Enter, q to cancel):" \
+      "No   — install items only" \
+      "Yes  — scaffold the tree, then install items"
+  case $? in
+    0) [ "$PICK_RESULT" -eq 1 ]; return $? ;;
+    1) info "Cancelled."; exit 130 ;;
+    2) ;;
+  esac
+  local ans
+  read_tty "Bootstrap project tree? [y/N]: " ans
+  [[ "$ans" =~ ^[Yy]$ ]]
+}
+
 # ---- Dispatch --------------------------------------------------------------
 
 install_dispatch() {
@@ -602,8 +698,10 @@ interactive_pick() {
 main() {
   MODE="copy"
   local action="install"
+  local do_bootstrap=0
   TARGET=""
   SCOPE=""
+  BOOTSTRAP_MODE="${BOOTSTRAP_MODE:-skip}"
 
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -613,9 +711,11 @@ main() {
       --user)          SCOPE="user"; shift ;;
       --project)       SCOPE="project"; shift ;;
       --link)          MODE="link"; shift ;;
+      --init)          do_bootstrap=1; shift ;;
+      --force)         BOOTSTRAP_MODE="force"; shift ;;
       --uninstall)     action="uninstall"; shift ;;
       --cursor-file)   CURSOR_AGENTS_FILE="$2"; shift 2 ;;
-      -h|--help)       sed -n '2,40p' "$SELF" 2>/dev/null || echo "See https://github.com/chuthuong2004/claude-skills#install"; return ;;
+      -h|--help)       sed -n '2,55p' "$SELF" 2>/dev/null || echo "See https://github.com/chuthuong2004/claude-skills#install"; return ;;
       --)              shift; break ;;
       -*)              err "Unknown flag: $1"; return 1 ;;
       *)               break ;;
@@ -623,6 +723,13 @@ main() {
   done
 
   if [ -z "$TARGET" ]; then ask_target; fi
+
+  # Bootstrap prompt comes before scope (scope only affects item destinations;
+  # bootstrap always targets $PWD).
+  if [ "$action" = "install" ] && [ "$do_bootstrap" -eq 0 ] && [ $# -eq 0 ] && have_tty; then
+    if ask_bootstrap; then do_bootstrap=1; fi
+  fi
+
   resolve_target_dst
 
   if [ "$action" = "uninstall" ]; then
@@ -631,8 +738,16 @@ main() {
     return
   fi
 
+  if [ "$do_bootstrap" -eq 1 ]; then
+    bootstrap_project "$PWD" || return 1
+  fi
+
   if [ $# -eq 0 ]; then
-    interactive_pick
+    # No items on CLI. Enter interactive picker if we have a TTY;
+    # otherwise (e.g. --init alone via a script) we're done.
+    if have_tty; then
+      interactive_pick
+    fi
     return
   fi
 

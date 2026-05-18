@@ -1,19 +1,20 @@
 # claude-skills
 
-A curated collection of [Claude Code](https://docs.claude.com/en/docs/claude-code) **skills** and **subagents** — also installable into **Cursor** via `AGENTS.md`.
+A curated collection of [Claude Code](https://docs.claude.com/en/docs/claude-code) **skills** and **subagents** — also installable into **Cursor** via `AGENTS.md`. Plus a one-command **project bootstrap** that scaffolds a full Claude-Code-ready repo tree (README, CLAUDE.md, AGENTS.md, docs/, .claude/agents+commands+shared+templates).
 
-One URL. Pick AI, pick scope, pick which items. Nothing is auto-installed.
+One URL. Pick AI, pick scope, optionally bootstrap, pick items. Nothing is auto-installed.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/chuthuong2004/claude-skills/main/install.sh | bash
 ```
 
-You'll get three interactive prompts:
+You'll get four interactive prompts:
 
 ```
-1) Pick AI tool         →  Claude Code  /  Cursor
-2) Pick scope            →  user (~/.claude/)  /  project ($PWD/.claude/)   ← Claude only
-3) Pick item(s)          →  multi-select: Space toggles, Enter confirms
+1) Pick AI tool          →  Claude Code  /  Cursor
+2) Bootstrap project?    →  Yes (scaffold README/CLAUDE.md/AGENTS.md/docs/.claude/) / No
+3) Pick scope            →  user (~/.claude/)  /  project ($PWD/.claude/)   ← Claude only
+4) Pick item(s)          →  multi-select: Space toggles, Enter confirms
 ```
 
 ---
@@ -79,6 +80,52 @@ Pick item(s) (↑/↓ move, Space toggle, a all, Enter confirm, q cancel):
 ```
 
 Toggle with `Space`, toggle all with `a`, confirm with `Enter`. Nothing happens until you confirm.
+
+---
+
+## Bootstrap a new project (`--init`)
+
+If you're starting a fresh repo and want the same Claude-Code conventions used in the source projects this collection grew out of, pass `--init`:
+
+```bash
+# Bootstrap only (no items)
+./install.sh --claude --project --init
+
+# Bootstrap + install items
+./install.sh --claude --project --init seo-expert architecture-doc-writer
+
+# Overwrite existing files (default is skip)
+./install.sh --claude --project --init --force
+```
+
+What `--init` writes to `$PWD`:
+
+```
+README.md                                    project README placeholder
+CLAUDE.md                                    Claude Code overlay → AGENTS.md
+AGENTS.md                                    vendor-neutral agent contract
+docs/
+  architecture/README.md                     how to organize architecture docs
+  changelogs/README.md                       per-domain changelog index
+  plans/README.md                            feature-plan index
+.claude/
+  config.md                                  single source of truth (ports/paths/cmds)
+  agents/{planner,implementer,code-reviewer,
+          cto,tester,qa-engineer,verifier,
+          deployer,devops}.md                9 specialist subagents
+  commands/{0-run,1-plan,2-implement,
+            3-review,4-test,5-deploy,
+            6-verify}.md                     6-stage lifecycle slash commands
+  shared/{principles,procedures,templates}.md
+                                             agent-shared resources
+  outputs/                                   stage handoff artifacts (with history/)
+  skills/                                    drop installed skills here
+  templates/docs/changelogs/CHANGELOG_TEMPLATE.md
+```
+
+Existing files are **skipped** by default — re-running `--init` is safe. Use `--force` to overwrite.
+
+After `--init`, edit `.claude/config.md` to replace `<placeholder>` values with your project's specifics. Then `grep -RIn '<PROJECT_NAME>' .` to find the rest.
 
 ---
 
@@ -231,6 +278,12 @@ rm -rf ~/.claude/skills/architecture-doc-writer
 ├── agents/
 │   └── seo-expert.md              # → ~/.claude/agents/seo-expert.md  (Claude)
 │                                  # → ## Agent: seo-expert in AGENTS.md (Cursor)
+├── scaffold/                      # → starter project tree used by --init
+│   ├── README.md                  #   (copied to $PWD/README.md)
+│   ├── CLAUDE.md
+│   ├── AGENTS.md
+│   ├── docs/{architecture,changelogs,plans}/
+│   └── .claude/{config.md, agents/, commands/, shared/, outputs/, skills/, templates/}
 └── skills/
     └── architecture-doc-writer/   # → ~/.claude/skills/architecture-doc-writer/ (Claude)
         ├── SKILL.md               # → ## Skill: architecture-doc-writer in AGENTS.md (Cursor)
@@ -253,6 +306,12 @@ rm -rf ~/.claude/skills/architecture-doc-writer
 2. Frontmatter: `name`, `description`, optional `model` (`sonnet` / `opus` / `haiku`).
 3. Body = the system prompt — be specific about when to use it, what to inspect, what conventions to follow.
 4. Add a row to the **Subagents** table above.
+
+**Changing the project scaffold:**
+1. Edit files under `scaffold/`. The directory mirrors the destination layout — a file at `scaffold/foo/bar.md` is copied to `$PWD/foo/bar.md` when a user runs `--init`.
+2. Empty directories should keep a `.gitkeep` so they're preserved when scaffolded.
+3. Add or update placeholders (`<PROJECT_NAME>`, `<API_PORT>`, etc.) consistently — they're the contract users find/replace after `--init`.
+4. Test locally: `cd /tmp && mkdir t && cd t && /path/to/install.sh --claude --project --init` then inspect the tree.
 
 See the [skills docs](https://docs.claude.com/en/docs/claude-code/skills) and [subagents docs](https://docs.claude.com/en/docs/claude-code/sub-agents).
 
